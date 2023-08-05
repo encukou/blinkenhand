@@ -1,7 +1,7 @@
 import sys
 import numpy
 rng = numpy.random.default_rng()
-colors = numpy.zeros((4, 6, 3))
+colors = numpy.zeros((4, 6, 3), dtype=int)
 print(colors)
 COLORS = (
     (0, 0, 0),
@@ -44,9 +44,9 @@ COORDS = {
 def handle_keypress(key):
     coords = COORDS.get(key)
     if coords:
-        now = tuple(colors[*coords])
+        now = tuple(colors[coords])
         nxt = NEXT_COLOR.get(now, (0, 0, 0))
-        colors[*coords] = nxt
+        colors[coords] = nxt
     elif key == 't':
         colors[:] = rng.choice(COLORS[1:], size=colors.shape[:2])
     elif key == 'u':
@@ -156,3 +156,30 @@ if sys.argv[1:2] == ['pyglet']:
                 rects[i][j].color = c
 
     pyglet.app.run()
+else:
+    import sys, os, tty, termios
+    from openrazer.client import DeviceManager
+
+    def readchar(stream=sys.stdin):
+        fd = stream.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            return os.read(fd, 1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    manager = DeviceManager()
+    device = manager.devices[0]
+    device.brightness = 100
+
+    def refresh():
+        for i, row in enumerate(colors):
+            for j, c in enumerate(row):
+                device.fx.advanced.matrix.set(i, j, tuple(c))
+        device.fx.advanced.draw()
+
+    refresh()
+    while (c := readchar()) not in b'\x1b\x7f=':
+        handle_keypress(c.decode())
+        print('press Esc, Backspace or `=` to quit')
